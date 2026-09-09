@@ -1,0 +1,46 @@
+
+{
+  "comparison_disjoint_coeff": 1.0,
+  "comparison_excess_coeff": 1.0,
+  "comparison_min_genome_size": 20,
+  "comparison_param_coeff": 0.4000000059604645,
+  "compatibility_threshold": 1.7000008821487427,
+  "generation": 12,
+  "next_organism_id": 1952,
+  "next_species_id": 1,
+  "population_size": 150,
+  "species": [
+    {
+      "adjusted_fitness_sum": 2254.9208984375,
+      "best_fitness_ever": 2988.0,
+      "best_fitness_this_gen": 2693.0,
+      "calibration_error": 0.0023650657385587692,
+      "consistency_last_click_prediction_error": 0.6348522901535034,
+      "created_generation": 0,
+      "hard_jitter": 9.777583181858063e-05,
+      "id": 0,
+      "inhibitory_excitatory_ratio": 0.10635583102703094,
+      "learning": 0.010583288036286831,
+      "max_spike_density": 0.06654577702283859,
+      "mean_certainty": 0.9751690030097961,
+      "mean_click_type_decisiveness": 0.0,
+      "mean_last_click_left_hits": 0.0,
+      "mean_last_click_prediction_error": 0.5884317755699158,
+      "mean_last_click_right_hits": 0.0,
+      "mean_reaction_time": 2.9177780151367188,
+      "mean_spike_density": 0.036624595522880554,
+      "medium_jitter": 7.785372872604057e-05,
+      "milliseconds_per_tick": 0.6580447554588318,
+      "offspring_count": 150,
+      "rep_fitness": 2693.0,
+      "rep_id": 1729,
+      "rep_path": "species/0-rep.json",
+      "size_this_gen": 150,
+      "snn_neuron_synapse_ratio": 0.008615424856543541,
+      "soft_jitter": 1.1991619430773426e-05,
+      "spike_density_error_ratio": 0.4767914414405823,
+      "stagnation_generations": 3
+    }
+  ],
+  "stagnation_limit": 15
+}

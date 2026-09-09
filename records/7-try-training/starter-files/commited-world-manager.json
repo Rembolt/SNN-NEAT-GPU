@@ -1,0 +1,63 @@
+{
+  "generation": 0,
+  "next_organism_id": 3,
+  "next_species_id": 3,
+  "population_size": 150,
+  "stagnation_limit": 77,
+  "speciation": {
+    "compatibility_threshold": 0.058
+  },
+  "species": [
+    {
+      "adjusted_fitness_sum": 0.0,
+      "best_fitness_ever": 0.0,
+      "best_fitness_this_gen": 0.0,
+      "created_generation": 0,
+      "id": 0,
+      "offspring_count": 0,
+      "rep_fitness": 0.0,
+      "rep_id": 0,
+      "rep_path": "species/0-rep.json",
+      "size_this_gen": 0,
+      "stagnation_generations": 0,
+      "score_on_progress_test": 0.0,
+      "top_one_representation_accuracy": 1.0,
+      "specie_differentiation": 0.0,
+      "differentiation_samples": 0
+    },
+    {
+      "adjusted_fitness_sum": 0.0,
+      "best_fitness_ever": 0.0,
+      "best_fitness_this_gen": 0.0,
+      "created_generation": 0,
+      "id": 1,
+      "offspring_count": 0,
+      "rep_fitness": 0.0,
+      "rep_id": 1,
+      "rep_path": "species/1-rep.json",
+      "size_this_gen": 0,
+      "stagnation_generations": 0,
+      "score_on_progress_test": 0.0,
+      "top_one_representation_accuracy": 1.0,
+      "specie_differentiation": 0.0,
+      "differentiation_samples": 0
+    },
+    {
+      "adjusted_fitness_sum": 0.0,
+      "best_fitness_ever": 0.0,
+      "best_fitness_this_gen": 0.0,
+      "created_generation": 0,
+      "id": 2,
+      "offspring_count": 0,
+      "rep_fitness": 0.0,
+      "rep_id": 2,
+      "rep_path": "species/2-rep.json",
+      "size_this_gen": 0,
+      "stagnation_generations": 0,
+      "score_on_progress_test": 0.0,
+      "top_one_representation_accuracy": 1.0,
+      "specie_differentiation": 0.0,
+      "differentiation_samples": 0
+    }
+  ]
+}

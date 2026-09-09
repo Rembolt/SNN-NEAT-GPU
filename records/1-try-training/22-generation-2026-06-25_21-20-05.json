@@ -1,0 +1,27 @@
+{
+  "comparison_disjoint_coeff": 1.0,
+  "comparison_excess_coeff": 1.0,
+  "comparison_min_genome_size": 20,
+  "comparison_param_coeff": 0.4000000059604645,
+  "compatibility_threshold": 3.0,
+  "generation": 22,
+  "next_organism_id": 1542,
+  "next_species_id": 1,
+  "population_size": 70,
+  "species": [
+    {
+      "adjusted_fitness_sum": 0.0,
+      "best_fitness_ever": 3339.0,
+      "best_fitness_this_gen": 0.0,
+      "created_generation": 0,
+      "id": 0,
+      "offspring_count": 70,
+      "rep_fitness": 2716.0,
+      "rep_id": 1450,
+      "rep_path": "species/0.json",
+      "size_this_gen": 0,
+      "stagnation_generations": 9
+    }
+  ],
+  "stagnation_limit": 15
+}

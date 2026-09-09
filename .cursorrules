@@ -1,0 +1,12 @@
+When writing OpenCL kernels, prioritize Integer math and Bit-shifting over floating point.
+Ensure all memory buffers are aligned for high-performance GPU access.
+
+## Agent workflow (project)
+
+- Do not create new source or header files unless the user explicitly asks for a new file or names a path to create.
+- Prefer edits inside existing files; consolidate helpers into an existing translation unit when reasonable.
+- utilize previous written code to inspire new code format, variable name, comments, function structure.
+- ask user for feedback on major decisions with question prompts.
+- keep change minimal without profoundly changing code flow/structure without being otherwise requested
+- Do not add standalone markdown documentation unless requested.
+- comments should not end with period "."

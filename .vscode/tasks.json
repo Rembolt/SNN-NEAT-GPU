@@ -1,0 +1,55 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "CMake: configure train-debug",
+            "type": "shell",
+            "command": "cmake --preset train-debug",
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake: build train-debug",
+            "type": "shell",
+            "command": "cmake --build --preset train-debug",
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": ["$gcc"],
+            "dependsOn": ["CMake: configure train-debug"]
+        },
+        {
+            "label": "CMake: workflow train-debug",
+            "type": "shell",
+            "command": "cmake --workflow train-debug",
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "none",
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "CMake: configure live-debug",
+            "type": "shell",
+            "command": "cmake --preset live-debug",
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake: build live-debug",
+            "type": "shell",
+            "command": "cmake --build --preset live-debug",
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": ["$gcc"],
+            "dependsOn": ["CMake: configure live-debug"]
+        },
+        {
+            "label": "CMake: workflow live-debug",
+            "type": "shell",
+            "command": "cmake --workflow live-debug",
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "none",
+            "problemMatcher": ["$gcc"]
+        }
+    ]
+}

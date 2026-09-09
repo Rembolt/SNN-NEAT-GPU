@@ -1,0 +1,164 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 19,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "mingw-base",
+            "hidden": true,
+            "generator": "MinGW Makefiles",
+            "description": "Single-config MinGW Makefiles. Compilers come from PATH, or set CMAKE_CXX_COMPILER / GLFW_ROOT / CMAKE_PREFIX_PATH"
+        },
+        {
+            "name": "train",
+            "displayName": "Train — NeatPipeline (Release)",
+            "description": "Record shared input + evaluate all DNAs/*.json. No debug logs.",
+            "inherits": "mingw-base",
+            "binaryDir": "${sourceDir}/build-train",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "SNN_GPU_APP_MODE": "train"
+            }
+        },
+        {
+            "name": "train-debug",
+            "displayName": "Train Debug — NeatPipeline (Debug)",
+            "description": "Same as train with SNN_GPU_DEBUG_LOGS.",
+            "inherits": "mingw-base",
+            "binaryDir": "${sourceDir}/build-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "SNN_GPU_APP_MODE": "train-debug"
+            }
+        },
+        {
+            "name": "live",
+            "displayName": "Live — LiveOrganism (Release)",
+            "description": "Adam.json, 2000 ticks, real-time scheduler + ghost overlay.",
+            "inherits": "mingw-base",
+            "binaryDir": "${sourceDir}/build-live",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "SNN_GPU_APP_MODE": "live"
+            }
+        },
+        {
+            "name": "live-debug",
+            "displayName": "Live Debug — LiveOrganism (Debug)",
+            "description": "Same as live with SNN_GPU_DEBUG_LOGS.",
+            "inherits": "mingw-base",
+            "binaryDir": "${sourceDir}/build-live-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "SNN_GPU_APP_MODE": "live-debug"
+            }
+        },
+        {
+            "name": "mingw-gcc",
+            "hidden": true,
+            "inherits": "train"
+        },
+        {
+            "name": "mingw-gcc-debug",
+            "hidden": true,
+            "inherits": "train-debug"
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "train",
+            "displayName": "Build train",
+            "configurePreset": "train",
+            "targets": ["snn_app"]
+        },
+        {
+            "name": "train-debug",
+            "displayName": "Build train-debug",
+            "configurePreset": "train-debug",
+            "targets": ["snn_app"]
+        },
+        {
+            "name": "live",
+            "displayName": "Build live",
+            "configurePreset": "live",
+            "targets": ["snn_app"]
+        },
+        {
+            "name": "live-debug",
+            "displayName": "Build live-debug",
+            "configurePreset": "live-debug",
+            "targets": ["snn_app"]
+        },
+        {
+            "name": "train-run",
+            "displayName": "Build + run train",
+            "configurePreset": "train",
+            "targets": ["run"]
+        },
+        {
+            "name": "train-debug-run",
+            "displayName": "Build + run train-debug",
+            "configurePreset": "train-debug",
+            "targets": ["run"]
+        },
+        {
+            "name": "live-run",
+            "displayName": "Build + run live",
+            "configurePreset": "live",
+            "targets": ["run"]
+        },
+        {
+            "name": "live-debug-run",
+            "displayName": "Build + run live-debug",
+            "configurePreset": "live-debug",
+            "targets": ["run"]
+        },
+        {
+            "name": "mingw-gcc",
+            "hidden": true,
+            "inherits": "train"
+        },
+        {
+            "name": "mingw-gcc-debug",
+            "hidden": true,
+            "inherits": "train-debug"
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "train",
+            "displayName": "Workflow: train",
+            "steps": [
+                { "type": "configure", "name": "train" },
+                { "type": "build", "name": "train-run" }
+            ]
+        },
+        {
+            "name": "train-debug",
+            "displayName": "Workflow: train-debug",
+            "steps": [
+                { "type": "configure", "name": "train-debug" },
+                { "type": "build", "name": "train-debug-run" }
+            ]
+        },
+        {
+            "name": "live",
+            "displayName": "Workflow: live",
+            "steps": [
+                { "type": "configure", "name": "live" },
+                { "type": "build", "name": "live-run" }
+            ]
+        },
+        {
+            "name": "live-debug",
+            "displayName": "Workflow: live-debug",
+            "steps": [
+                { "type": "configure", "name": "live-debug" },
+                { "type": "build", "name": "live-debug-run" }
+            ]
+        }
+    ]
+}

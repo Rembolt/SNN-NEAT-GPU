@@ -1,0 +1,17 @@
+{
+    "cmake.cmakePath": "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe",
+    "cmake.useCMakePresets": "always",
+    "cmake.configurePreset": "train-debug",
+    "cmake.buildPreset": "train-debug",
+    "cmake.configureOnOpen": true,
+    "cmake.copyCompileCommands": "${workspaceFolder}/compile_commands.json",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/compile_commands.json",
+    "C_Cpp.default.compilerPath": "C:/msys64/mingw64/bin/g++.exe",
+    "C_Cpp.default.intelliSenseMode": "windows-gcc-x64",
+    "C_Cpp.default.cppStandard": "c++20",
+    "C_Cpp.default.cStandard": "c17",
+    "C_Cpp.default.defines": [
+        "CL_TARGET_OPENCL_VERSION=300"
+    ],
+    "clangd.enable": false
+}
