@@ -10,11 +10,9 @@
 
 ## Why this exists
 
-Hand-rolling GPU kernels for a spiking net is unusual for a reason. Spike timing, axonal delay, and local plasticity are event-driven and sparse. Flattening that into a dense layer stack throws away the thing that makes an SNN an SNN.
+Home brewed GPU kernels for a spiking net is unusual for a reason. Spike timing, axonal delay, and local plasticity are event-driven and sparse. Flattening that into a dense layer stack throws away the thing that makes an SNN an SNN.
 
-This repo is the full stack: a work-efficient OpenCL simulator, sparse graph layouts, neuroevolution as the search algorithm, live input capture, crash-safe checkpoints, and a visualizer for genomes that do not fit in a log line.
-
-The interesting engineering problem is the combination: preserve temporal structure on a SIMT device while searching a discontinuous space of topologies *and* neuron parameters.
+This personal project is the full stack: a work-efficient OpenCL simulator, sparse graph layouts, neuroevolution as the search algorithm, live input capture, crash-safe checkpoints, and a visualizer for genomes that do not fit in a log line.
 
 ## Architecture
 
