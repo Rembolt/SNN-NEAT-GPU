@@ -6,7 +6,7 @@
   <img src="docs/best-organism.gif" alt="Best performing SNN organism predicting the cursor live">
 </p>
 
-<p align="center"><em>Live inference: predicted ghost cursor against the real pointer.</em></p>
+<p align="center"><em>Live inference: predicted ghost cursor [BLUE CIRCLE OVERLAY] against the real pointer.</em></p>
 
 ## Why this exists
 
