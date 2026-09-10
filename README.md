@@ -1,6 +1,6 @@
 # SNN-NEAT-GPU
 
-**A from-scratch C++ / OpenCL spiking neural network that predicts mouse position and clicks. Topology and AdEx dynamics are searched with NEAT. No backpropagation, no tensor library.**
+**A from-scratch C++ / OpenCL spiking neural network that predicts mouse position and clicks. Topology and AdEx dynamics are searched with NEAT. Backpropagation is done in small scale and while the model is live and running on the machine, no tensor library.**
 
 <p align="center">
   <img src="docs/best-organism.gif" alt="Best performing SNN organism predicting the cursor live">
