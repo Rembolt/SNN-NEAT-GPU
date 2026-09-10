@@ -78,7 +78,7 @@ constexpr std::size_t k_progress_test_max_clips = 5;
 
 namespace live_organism {
 
-constexpr unsigned long k_live_tick_count = 1000ul;
+constexpr unsigned long k_live_tick_count = 3000ul;
 
 }  // namespace live_organism
 

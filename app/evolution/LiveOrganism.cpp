@@ -34,7 +34,7 @@ void LiveOrganism::run()
     cl.printDevice();
 
     DNAReader dna_reader;
-    dna_reader.readDNAFile("species/1858-legend.json");
+    dna_reader.readDNAFile("species/1288-legend.json");
     HostOrganismBuffers h_organism_buffers = dna_reader.getOrganismBuffers();
     HostAppParams h_app_params = dna_reader.getAppParams();
 
