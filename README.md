@@ -1,32 +1,34 @@
 # SNN-NEAT-GPU
 
-**A spiking neural network built from scratch in C++ and OpenCL that learns to predict mouse position and clicks, with both its topology and neuron dynamics evolved through NEAT instead of backpropagation**
+**A from-scratch C++ / OpenCL spiking neural network that predicts mouse position and clicks. Topology and AdEx dynamics are searched with NEAT. No backpropagation, no tensor library.**
 
 <p align="center">
   <img src="docs/best-organism.gif" alt="Best performing SNN organism predicting the cursor live">
 </p>
 
-<p align="center"><em>Best-performing organism: ghost cursor vs real mouse during live inference</em></p>
+<p align="center"><em>Live inference: predicted ghost cursor against the real pointer.</em></p>
 
-## Why this project
+## Why this exists
 
-Most neural-network projects rely on established tensor libraries; this one contains the complete simulation and learning pipeline as sparse OpenCL kernels. The challenge is twofold: preserve spike timing, delayed transmission, and local plasticity efficiently on a GPU while searching a large, discontinuous space of network structures and biologically inspired parameters.
+Hand-rolling GPU kernels for a spiking net is unusual for a reason. Spike timing, axonal delay, and local plasticity are event-driven and sparse. Flattening that into a dense layer stack throws away the thing that makes an SNN an SNN.
 
-The result is an end-to-end neuroevolution system covering GPU compute, sparse data structures, evolutionary algorithms, real-time input capture, fault-tolerant training state, and custom visualization.
+This repo is the full stack: a work-efficient OpenCL simulator, sparse graph layouts, neuroevolution as the search algorithm, live input capture, crash-safe checkpoints, and a visualizer for genomes that do not fit in a log line.
 
-## System architecture
+The interesting engineering problem is the combination: preserve temporal structure on a SIMT device while searching a discontinuous space of topologies *and* neuron parameters.
 
-`Mouse input → spike encoding → AdEx neuron update → spike compaction → reward-modulated STDP → delayed propagation → output decoding → fitness → NEAT reproduction`
+## Architecture
 
-- **Simulation core:** Adaptive Exponential Integrate-and-Fire neurons, refractory periods, firing-rate traces, and homeostatic regulation
-- **Sparse GPU pipeline:** CSR adjacency for outgoing propagation, CSC adjacency for incoming STDP updates, packed dirty bits, and circular buffers for per-synapse delays
-- **Learning:** reward-modulated spike-timing-dependent plasticity updates weights during each evaluation
-- **Evolution:** NEAT-style structural and parameter mutation, innovation tracking, tournament selection, elitism, stagnation handling, and adaptive speciation
-- **Evaluation:** every organism replays the same recorded mouse-input clip; separate progress-test clips measure generalization
+`Mouse input → spike encoding → AdEx update → spike compaction → reward-modulated STDP → delayed propagation → output decode → fitness → NEAT`
 
-### AdEx membrane
+- **Neuron model:** Adaptive Exponential Integrate-and-Fire, refractory period, firing-rate traces, homeostatic regularization
+- **Sparse layout:** CSR for fan-out (propagation), CSC for fan-in (STDP / homeostasis), bit-packed dirty flags, circular delay buffers
+- **Online learning:** reward-modulated STDP during evaluation, not a separate backward pass
+- **Search:** NEAT structural mutation, innovation tracking, tournament selection, elitism, stagnation, adaptive speciation
+- **Evaluation:** one shared recorded clip per generation for comparable selection; a held-out progress test for generalization
 
-Each hidden and output neuron is an Adaptive Exponential Integrate-and-Fire cell. Voltage `V` leaks toward rest, explodes exponentially near threshold, and is pulled down by a slower adaptation current `w`. A spike resets `V`, jumps `w`, and locks the cell in refractory.
+### AdEx
+
+Hidden and output units are AdEx cells. Membrane voltage leaks toward rest, has an exponential spike-onset term near threshold, and is opposed by a slower adaptation current `w`. A spike resets `V`, increments `w`, and enters refractory.
 
 ```mermaid
 flowchart LR
@@ -54,11 +56,11 @@ if V ≥ V_T:
     V ← V_rest ,  w ← w + b ,  enter refractory
 ```
 
-`C`, `g_L`, `E_L`, `Δ_T`, and `V_peak` are genome globals. `a`, `b`, `τ_w`, `V_T`, `V_rest`, and refractory length mutate per neuron. On the GPU, AdEx only runs for neurons marked dirty by incoming delayed charge, and it catch-up integrates every missed tick since that cell last updated.
+Global constants (`C`, `g_L`, `E_L`, `Δ_T`, `V_peak`) live on the genome. Per-neuron parameters (`a`, `b`, `τ_w`, `V_T`, `V_rest`, refractory length) mutate independently. Integration is event-driven: only neurons marked dirty by incoming delayed charge run AdEx, and they catch up every skipped tick since last write. That is occupancy-aware sparse update, not a dense `N` sweep every frame.
 
-### GPU kernels
+### Kernel pipeline
 
-One simulation tick is six OpenCL stages. Work stays sparse: AdEx follows dirty bits, STDP and propagation follow the compacted spike list, and delays live in a circular ring.
+One simulation tick is six kernels. The pipeline stays work-efficient: AdEx follows dirty bits, STDP and propagation follow a compacted spike list, delays live in a ring buffer.
 
 ```mermaid
 flowchart TB
@@ -93,33 +95,33 @@ flowchart TB
  spike IDs ──CSC──►  STDP Δw = reward × (pot·trace − dep·(1−trace))
 ```
 
-CSR walks outgoing synapses after a spike. CSC walks incoming synapses for plasticity and homeostasis. The delay ring is why timing is a first-class genome parameter instead of a discrete layer depth.
+CSR answers "where does this spike go." CSC answers "which incoming synapses get credit." Stream compaction (warp-level prefix sum over 32 lanes) turns a sparse boolean spike vector into a dense ID list so later kernels do not scan `N`. The delay ring makes axonal delay a first-class genome parameter instead of fake layer depth.
 
-### Species by behavior, not genome shape
+### Speciation on phenotype, not genotype
 
-Classic NEAT clusters organisms by excess/disjoint genes and weight distance. That failed here: two networks can look unrelated on paper and still park the ghost cursor in the same place, or share a topology and click completely differently.
+Canonical NEAT compatibility uses excess/disjoint genes and weight distance — genomic topology. That is the wrong metric for this task. Two unrelated graphs can produce the same cursor trajectory (phenotypic convergence). Two isomorphic graphs can disagree on click type (same genotype, different policy).
 
-Compatibility is therefore a **behavior distance** on the shared generation clip. Every `25` ticks the engine logs predicted `(x, y)` plus left/right click rates. Distance is `0.7` position + `0.3` click, already normalized to `[0, 1]`. Organisms whose traces differ by less than the adaptive threshold (starts at `15%`) are the same species.
+Compatibility is therefore a **behavior distance** on the shared generation clip, the analog of clustering on rollout traces rather than on parameter vectors. Every 25 ticks the engine logs predicted `(x, y)` and left/right click rates. Distance is `0.7` position + `0.3` click, already normalized to `[0, 1]`. Below an adaptive threshold (starts at 15%) they are the same species.
 
-That keeps selection pressure on *what the network does*, which is the only signal that matters for a mouse predictor, and it lets speciation stay stable while genomes grow.
+Selection pressure stays on the policy. Genomic distance would protect structural novelty that does not change the mouse. Behavioral niching also remains well-defined as genomes grow, which genomic distance does not.
 
-## Seeds: Adam, Eve, and Abel
+## Seeds: Adam, Eve, Abel
 
-Training starts from three hand-built genomes in `DNAs/` so evolution is not betting on a single topology. All three share the same input/output layout; they differ in how much hidden structure they already have.
+The search is not started from a single inductive bias. Three hand-built seeds in `DNAs/` share the same I/O layout and differ in initial complexity — a controlled ablation on starting topology.
 
-| Seed | Role | Hidden neurons | Synapses | Species id | How long that species lived |
+| Seed | Role | Hidden | Synapses | Species id | Species lifetime |
 | --- | --- | ---: | ---: | ---: | --- |
-| **Adam** | Minimal | 0 | 2 | 0 | Generations 0–73, the longest of the three |
-| **Abel** | Middle | 0 | 6 | 2 | Generations 0–45, then split into new species |
-| **Eve** | Complex | 5 | 65 | 1 | Never established a stable species |
+| **Adam** | Minimal | 0 | 2 | 0 | Gens 0–73, longest of the three |
+| **Abel** | Middle | 0 | 6 | 2 | Gens 0–45, then speciated away |
+| **Eve** | Complex | 5 | 65 | 1 | Never formed a stable species |
 
-Three seeds exist because earlier runs died in opposite ways: a single tiny genome could not invent useful paths, and a single rich genome locked the search into an unmutable blob. Seeding a complexity ladder lets mutation add structure where it helps and abandon it where it does not.
+Earlier runs failed in both directions: a single minimal genome had no expressivity; a single dense genome occupied a rugged local basin that mutation could not leave. A complexity ladder is the compromise: add structure where the fitness landscape rewards it, drop it where it does not.
 
-**Adam lasted longest because it was simple, not because it was better.** Two synapses leave almost no room for a mutation to change cursor behavior. Under behavioral speciation, offspring that still move the ghost cursor like their parent stay in the same species, so species 0 stayed large and cohesive for 73 generations. It was a stable niche: hard to break, easy to copy, slow to empty.
+**Adam's species survived longest because the genome was mutation-robust, not because the policy was strong.** Two synapses. Most mutations are phenotypically silent, so offspring stay inside the behavior-distance threshold and remain in species 0. The cluster stayed large for 73 generations: high heritability of behavior, low speciation rate, slow extinction.
 
-That same simplicity capped it. Adam could not grow a richer strategy, its progress-test score stuck near **3,934**, and by generation 73 it was assigned **zero offspring** after 47 stagnant generations. Survival was robustness, not discovery.
+That same robustness is a capacity limit. The policy could not climb. Held-out score stalled near **3,934**. By generation 73 the species had **zero offspring** after 47 stagnant generations — a diversity-preserving niche that selection eventually starved.
 
-Abel went the other way. Six connections were enough for descendants to *act* differently, so they crossed the compatibility threshold and left species 2. The species id died around generation 45 even though Abel-style wiring kept evolving under new ids. Eve's five hidden cells and 65 synapses made traces noisy and the mutation neighborhood huge, so that seed never formed species 1 at all.
+Abel is the opposite failure mode of success. Six connections were enough for descendants to leave the phenotypic neighborhood, cross the compatibility threshold, and split into new species ids. Species 2 died around generation 45 while Abel-like wiring continued under new ids. Eve's five hidden units and 65 synapses produced noisy traces and a large mutation neighborhood; it never established species 1. Premature complexity, no foothold.
 
 <p align="center">
   <img src="docs/adam.png" alt="Adam seed genome" width="32%">
@@ -127,67 +129,69 @@ Abel went the other way. Six connections were enough for descendants to *act* di
   <img src="docs/abel.png" alt="Abel seed genome" width="32%">
 </p>
 
-<p align="center"><em>Adam (left), Eve (center), Abel (right)</em></p>
+<p align="center"><em>Adam, Eve, Abel</em></p>
 
 ## Results
 
-The latest training run reached **677 generations** with a population of **150** and maintained **6 active species**. The recorded best raw fitness was **5,020**; at generation 671, the best held-out progress-test score was **3,738**, while species logs reported approximately **0.23 ms per simulation tick** on the development machine. Fitness values are internal optimization scores, not external benchmark results.
+Latest run: **677 generations**, population **150**, **6** active species. Best raw fitness **5,020**. Best held-out progress-test score at generation 671: **3,738**. About **0.23 ms per tick** on the development machine. These are internal optimization scores, not an external benchmark.
 
-Progress was real but ultimately plateaued. Minimal starting topologies, better-scaled mutations, corrected speciation, and revised fitness signals moved training beyond the early dead ends; however, later generations still converged on incomplete strategies. For example, a leading generation-671 species achieved roughly **95.6% left-click hits but 0% right-click hits**, exposing behavioral collapse rather than a solved predictor.
+Training moved. Then it plateaued. Better seeds, per-parameter mutation scales, corrected speciation, and a cleaner fitness signal cleared the early dead ends. Later generations still converged on a partial policy. A leading species at generation 671 reached ~**95.6% left-click hits and 0% right-click hits** — mode collapse on click type, not a solved predictor.
 
-### Species representatives: 1288 and 1858
+### Species representatives
 
-These graphs are not named organisms. Each species keeps a **representative**: the current generation's fittest member of that species (`species/<id>-rep.json`). A separate **legend** (`species/<id>-legend.json`) stores the member that generalized best on the progress test. Live inference loads the legend of species 1288.
+The graphs are species representatives, not named organisms. Each species stores a **rep** (`species/<id>-rep.json`): the generation champion, used as the phenotypic centroid for compatibility. A **legend** (`species/<id>-legend.json`) stores the member with the best held-out score. Live inference loads the legend of species 1288.
 
-**Species 1288** appeared at generation **334** and stayed dominant for roughly **240 generations**. Its representative is the stronger of the two graphs below: about **95.5% left-click hits**, a progress-test score of **4,112**, and a best raw fitness near **4,960** — still **0% right-click hits**. That representative is the best cursor-pursuit genome the run produced, not a complete click predictor.
+**Species 1288** appeared at generation **334** and remained dominant for ~**240** generations. Its representative is the stronger of the two: ~**95.5%** left-click hits, progress test **4,112**, best raw near **4,960**. Right-click still **0%**. Best cursor-pursuit genome in the run. Incomplete click classifier.
 
 ![Representative of species 1288](docs/organism-1288.png)
 
-**Species 1858** is the latest leading species, created at generation **571** and still present at generation **677**. Its representative (`docs/organism-1858.png`) scores lower on the held-out progress test (**3,638** vs 1288's **4,112**) even though this species briefly posted the run's highest raw clip fitness (**5,020**). That gap is the clip lottery: a lucky generation clip is not the same as a better predictor. Right-click hits remain **0%**.
+**Species 1858** is the latest leading species (created generation **571**, still present at **677**). Its representative is weaker on the held-out set (**3,638** vs 1288's **4,112**) even though this species posted the run's highest in-sample clip fitness (**5,020**). That gap is the generalization gap: a lucky training clip is not a better estimator. Right-click remains **0%**.
 
 ![Representative of species 1858](docs/organism-1858.png)
 
 ### Progress test vs generation clip
 
-Every generation, all 150 organisms replay **one shared recorded clip** (~2,813 ticks, ~45 seconds). That clip is the fair contest for that generation: same mouse path, same clicks, comparable fitness. The next generation draws a different clip, so those scores are **not** a timeline of true skill. A lucky easy clip inflates everyone; a hard clip punishes everyone.
+Every generation, the full population of 150 replays **one shared recorded clip** (~2,813 ticks, ~45 seconds). That is a paired comparison: identical stimulus, comparable fitness, valid for *that* generation's ranking. The next generation samples a different clip, so the series is not a learning curve. Clip difficulty is a confounder. An easy draw inflates everyone; a hard draw tanks everyone. Treating it as progress would be reading noise as signal.
 
-The **progress test** exists because selection must not trust that lottery. After each generation the top **3** organisms of every species are re-scored on a **fixed held-out set** of up to **5** clips in `mouse-input-log-clips/progress-test/`. The mean of those clips is the generalization score. **Species stagnation, legend replacement, and “did we actually get better?” are decided here**, not on the generation clip.
+The **progress test** exists because in-sample fitness is not an unbiased estimator. After each generation the top **3** organisms per species are re-evaluated on a **fixed held-out set** of up to **5** clips in `mouse-input-log-clips/progress-test/`. Mean score is the generalization metric. Stagnation, legend replacement, and whether the population improved are gated on this split — the analog of a locked validation set, not the training batch.
 
 ![Progress-test timeline](docs/progress-test-timeline.png)
 
 ![Best fitness on individual random clips](docs/clip-fitness-timeline.png)
 
-Read the two graphs together: the clip timeline is noisy by design; the progress-test timeline is the one that answers whether the population generalized.
+Read them as a pair. The clip timeline is high-variance by construction (distribution shift every generation). The progress-test timeline is the one that answers generalization.
 
-### Click-prediction error
+### Prediction error
 
-Prediction error is the **largest fitness term** (weight `24`, ahead of click-type hits at `14` each). For every physical click it measures how close the ghost cursor stayed to that click location across the ticks since the previous click — a squared-closeness complement of RMS distance, in `[0, 1]`, lower better.
+Prediction error is the **highest-weight fitness term** (24, versus 14 for each click-type hit). On every physical click it measures how close the predicted cursor stayed to that click location over the ticks since the previous click — a squared-closeness complement of RMS distance, in `[0, 1]`, minimized.
 
-That term exists so evolution cannot game the task by guessing the button while ignoring *where* to click, or by arriving only on the click frame. Hovering on the target early is what a real predictor must do, and it is also the error signal packed back into the next tick for reward-modulated STDP.
+Without it, the search reward-hacks: classify the button, ignore localization, or snap to the target only on the click frame. Early hovering is the actual temporal credit-assignment problem. The same error is packed back into the next tick as the STDP reward signal, so local plasticity and global fitness are aligned on one objective.
 
 ![Click-prediction-error timeline](docs/click-prediction-error-timeline.png)
 
 ### Left-click hits vs right-click hits
 
-A **hit** is a physical click whose next-click *type* was predicted correctly: the decoded `left_click` logit outvoted `right_click`, or the reverse. They are separate metrics because they are separate output slots, separate fitness terms, and — in this run — separate evolutionary fates.
+A **hit** is a physical click whose next-click *type* was predicted correctly: the decoded `left_click` logit outvoted `right_click`, or the reverse.
+
+They are tracked separately because they are separate output heads, separate fitness terms, and — in this run — separate evolutionary outcomes. Aggregating them into one "click accuracy" would hide class-conditional collapse.
 
 ![Left-click hits timeline](docs/left-click-hits-timeline.png)
 
 ![Right-click hits timeline](docs/right-click-hits-timeline.png)
 
-Left-click hits climbed toward saturation. Right-click hits stayed at **0%**. Always preferring left is a stable local optimum on clips that contain more left clicks, and the two buttons do not share credit. That split is why both graphs are required: a single “click accuracy” number would hide the collapse.
+Left-click hits saturated. Right-click hits stayed at **0%**. Always preferring left is a stable local optimum under class imbalance (clips often contain more left clicks) and because the two heads do not share credit. Independent metrics make that failure visible.
 
 ## Visualizer
 
-The PySide6 visualizer in `debug/Visualizer.py` is the debugging surface for genomes that are thousands of JSON fields and for training logs that are high-dimensional time series. Console fitness alone cannot show a silent synapse, a species that collapsed to one behavior, or a neuron whose AdEx parameters drifted into a dead regime.
+`debug/Visualizer.py` exists because scalar fitness is not an observability story. Genomes are thousands of JSON fields. Training state is a high-dimensional time series. A dead synapse, a species that collapsed to one policy, an AdEx cell whose parameters drifted out of the operating regime — none of that appears in a score.
 
-It was built for **debugging and depth analysis**:
+It is the debugging and depth-analysis surface:
 
-- click any neuron or connection to read live parameters
-- pan/zoom the topology; hide isolated nodes
-- auto-reload when a DNA file changes on disk
-- browse `species/` as files appear during training
-- double-click world-manager fields to plot a metric across generations
+- inspect neuron and synapse parameters on click
+- pan/zoom topology, hide isolated nodes
+- hot-reload DNA when the file changes on disk
+- watch `species/` as checkpoints appear during training
+- plot world-manager metrics across generations
 
 ```powershell
 python -m pip install PySide6
@@ -200,24 +204,24 @@ python debug/Visualizer.py species/1288-legend.json
 
 ### DNA as JSON
 
-Every genome is a readable JSON file (`global_genome`, `neuron_genomes`, `connection_genomes`) under `DNAs/` for seeds and `species/` for the living population. JSON is intentional: genomes can be diffed, patched, and opened in the visualizer without a binary decoder. Archived seeds and matching world-state files live under `records/starter-files/`.
+Genomes are versionable JSON (`global_genome`, `neuron_genomes`, `connection_genomes`). Seeds live in `DNAs/`, the living population in `species/`. JSON is a deliberate choice: human-readable, diffable, patchable, and loadable in the visualizer with no custom decoder. Archived seeds and world-state: `records/starter-files/`.
 
-### Mouse-input clips (`.miclip`)
+### Mouse clips (`.miclip`)
 
-Training records and replays mouse motion as little-endian binary clips in `mouse-input-log-clips/` (`MICP` magic, version 1). Each file is a header plus a tightly packed array of the `HostMouseInput` POD, one sample per simulation tick.
+Input is recorded as a little-endian binary log in `mouse-input-log-clips/` (`MICP` magic, version 1). Header, then a tightly packed `HostMouseInput` POD per tick — replay-stable, trivially copyable, no serialization tax on the hot path.
 
-**File header**
+**Header**
 
-| Field | Type | What it is |
+| Field | Type | Meaning |
 | --- | --- | --- |
 | `magic` | `uint32` | `0x504C434D` (`MICP`) |
 | `version` | `uint32` | format version (`1`) |
 | `struct_size` | `uint32` | `sizeof(HostMouseInput)` |
-| `tick_count` | `uint64` | number of samples that follow |
+| `tick_count` | `uint64` | samples that follow |
 
 **Each sample (`HostMouseInput`)**
 
-| Field | Type | What it is |
+| Field | Type | Meaning |
 | --- | --- | --- |
 | `x_norm` | `float` | cursor X in `[0, 1]` of the monitor |
 | `y_norm` | `float` | cursor Y in `[0, 1]` |
@@ -226,38 +230,38 @@ Training records and replays mouse motion as little-endian binary clips in `mous
 | `left_mouse_clicked` | `float` | left button held |
 | `right_mouse_clicked` | `float` | right button held |
 | `scroll_mouse_clicked` | `float` | middle / scroll click |
-| `left_click_edge` | `float` | left button pressed this tick |
-| `right_click_edge` | `float` | right button pressed this tick |
+| `left_click_edge` | `float` | left pressed this tick |
+| `right_click_edge` | `float` | right pressed this tick |
 
 Held-out progress-test clips use the same format in `mouse-input-log-clips/progress-test/`.
 
 ## Development history
 
-- **Foundation (days 1–3):** Built the initial simulator and NEAT pipeline, then traced early stagnation to over-complex seed genomes, incorrect dynamic-speciation math, and mutation-distribution bugs
-- **Evolution stability (days 4–7):** Introduced parameter-specific mutation scales, corrected firing-rate decay, stabilized the species count, raised the population from 70 to 150, and reworked elitism and stagnation safeguards
-- **Observability and speed (days 8–12):** Removed scoring caps, expanded generation/species logs, made saves recoverable, reused compiled kernels, and reduced per-organism setup overhead; the faster run still plateaued after 370 generations
-- **Search-space redesign (days 13–18):** Started from minimal structured topologies, reduced output encoding size, increased stagnation patience, and replaced competing anticipation/location objectives with one time-aware squared prediction error
-- **Generalization and diversity (days 19–23):** Removed uneven retesting, switched from genotypic to behavioral speciation, added fixed progress-test clips, and seeded three complexity levels (Adam, Abel, and Eve). Training improved early, then stalled again by generation 677
+- **Days 1–3:** Initial simulator and NEAT. Early stagnation traced to over-parameterized seeds, incorrect dynamic-speciation math, and mutation-distribution bugs
+- **Days 4–7:** Per-parameter mutation scales, firing-rate decay fix, stable species count, population 70 → 150, elitism and stagnation reworked
+- **Days 8–12:** Uncapped scores, richer logs, atomic recoverable saves, kernel-program reuse, lower per-organism setup. Throughput improved; the run still plateaued after 370 generations
+- **Days 13–18:** Minimal structured topologies, smaller output encoding, higher stagnation patience, single time-aware squared prediction error instead of competing objectives
+- **Days 19–23:** Removed uneven retesting. Phenotypic speciation, locked progress-test clips, Adam / Abel / Eve seeds. Early gains, then another plateau by generation 677
 
-## Limitations and future work
+## Limitations
 
-- The evolved policy did not become a reliable general mouse predictor; click-side collapse and long fitness plateaus remain
-- The next investigation should isolate the effect of neuron-to-synapse density, species stagnation limits, and behavior-distance thresholds
-- Fitness still provides delayed, indirect credit for a temporal SNN task; richer novelty or curriculum signals may improve credit assignment
-- GPU occupancy and host/device synchronization have not been profiled systematically across hardware
-- The current build and input-capture path target Windows; portability work is still needed
+- The evolved policy is not a reliable general mouse predictor. Click-type collapse and long fitness plateaus remain
+- Next ablations: neuron-to-synapse density, species stagnation horizon, behavior-distance threshold
+- Fitness still supplies delayed, indirect credit on a temporal SNN task. Novelty search or curriculum could improve credit assignment
+- GPU occupancy and host/device synchronization have not been profiled across hardware
+- Build and input capture target Windows; portability is unfinished
 
 ## Run locally
 
 ### Requirements
 
-- Windows with a working OpenCL SDK/runtime and a GPU or CPU OpenCL device
-- CMake 3.25+, a C++20 MinGW toolchain, and GLFW 3
-- Internet access during the first configure step to fetch `nlohmann/json`
+- Windows with an OpenCL SDK/runtime and a GPU or CPU OpenCL device
+- CMake 3.25+, C++20 MinGW toolchain, GLFW 3
+- Network access on first configure (`nlohmann/json`)
 
 ### Live inference
 
-The live preset loads the checked-in champion genome (`species/1288-legend.json`) and displays its predicted position as a ghost cursor:
+Loads the legend of species 1288 and draws predicted position as a ghost cursor:
 
 ```powershell
 cmake --preset live
@@ -267,7 +271,7 @@ cmake --build --preset live
 
 ### Training
 
-Training continuously records/replays mouse-input clips, evaluates the population, updates species, and writes recoverable generation state:
+Records and replays clips, evaluates the population, updates species, writes recoverable generation state:
 
 ```powershell
 cmake --preset train
@@ -275,9 +279,9 @@ cmake --build --preset train
 .\build-train\snn_app.exe
 ```
 
-Training expects seed genome JSON files in `DNAs/`. Archived seed genomes and matching world-state files are available under `records/starter-files/`.
+Seed DNA JSON belongs in `DNAs/`. Archived seeds and world-state: `records/starter-files/`.
 
-## Tech stack
+## Stack
 
 C++20 · OpenCL · CMake · GLFW · nlohmann/json · Python · PySide6
 
